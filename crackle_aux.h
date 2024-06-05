@@ -7,9 +7,9 @@
 
 static inline void set_crackle_units(code_units *units, chemistry_data_storage grackle_rates, double gamma, crackle_units *cunits) {
                 /* Set units */
-        cunits->dom      = units->density_units/mh; // converts to physical H number density
+        cunits->dom      = units->density_units/mh; // converts to equivalent physical H number density
         cunits->dom_inv  = 1./cunits->dom;
-        cunits->time_to_cgs = units->time_units;  // tbase1
+        cunits->time_to_cgs = units->time_units;  // tbase1 in original grackle
         cunits->length_to_cgs = units->length_units;  // xbase1
         cunits->density_to_cgs = units->density_units;  // dbase1
         cunits->temp_to_K = units->temperature_units;  // usually 1

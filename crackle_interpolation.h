@@ -90,7 +90,6 @@ static inline void compute_self_shielded_rates(grackle_part_data *gp, chemistry_
                     0.035 * exp(-8.5e-4 * sqrt(1. + x)) / sqrt(1. + x);
 
 	    my_rates->k31shield *= f_shield;
-	    if (gp->verbose) printf("k31: %g %g %g %g %g %g\n",my_rates->k31shield ,N_H2*1.e-17, f_shield, cunits.c_ljeans, gp->H2I_density, gp->tgas);
 	}
 }
 

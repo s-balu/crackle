@@ -46,12 +46,11 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	/* initialize inteprolation of chemistry rate tables for this particle */
 	init_temperature_interpolation(&gp, chemistry, &interpolation, cunits, grackle_rates);
 
-	/* see whether we should be evolving dust and H2 */
-	int ism_flag = (gp.nH > 0.13 && gp.tgas < 1.e5 && cunits.redshift < 30.);
+	/* (conservatively) see whether we should be evolving dust and H2 */
+	int ism_flag = (gp.nH > 0.01 && gp.tgas < 1.e5 && cunits.redshift < 30.);
 
 	while (dtcool < dt) {
-		//if (gp.tgas < 40 && gp.H2I_density/gp.HI_density > 1.e-4) gp.verbose=1;
-		if (gp.H2I_density/gp.HI_density > 1.e-4) gp.verbose=0;
+	    //if (gp.nH > 1.e2 && gp.dust_density/(gp.dust_density+gp.metal_density) < 0.1 && gp.dust_density/(gp.dust_density+gp.metal_density) > 1.e-3 ) gp.verbose=1;
 	    /* Retain previous iteration particle info */
 	    memmove(&gp_old, &gp, sizeof(gp)); 
 	    /* Set up cooling/heating rates interpolation */
@@ -105,8 +104,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    iter ++;
 
 	    if (gp.verbose) printf("iter: i=%d dt=%g nh=%g e=%g de=%g HI=%g HII=%g H2I=%g HeI=%g HeII=%g dust=%g T=%g Td=%g\n", iter, dtit, gp.rhoH * units->density_units / mh, gp.internal_energy, gp.e_density, gp.HI_density/gp.density, gp.HII_density/gp.density, gp.H2I_density/gp.density, gp.HeI_density/gp.density, gp.HeII_density/gp.density, gp.dust_density/gp.density, gp.tgas, gp.tdust);
-	    if (gp.verbose) printf("rates: i=%d fdt=%g edot=%g dedot=%g HIdot=%g T=%g rhoH=%g\n",iter, dtit/dt, gp.edot, gp.dedot, gp.HIdot, gp.tgas, gp.density*units->density_units/mh );
-	    assert(gp.verbose==0);
+	    if (gp.verbose) printf("rates: i=%d fdt=%g edot=%g dedot=%g HIdot=%g T=%g n=%g\n",iter, dtit/dt, gp.edot, gp.dedot, gp.HIdot, gp.tgas, gp.density*units->density_units/mh );
 	    
 	    /* Check for convergence or too many iterations */
 	    //if (fabs(gp.edot * dtit) < CONVERGENCE * gp.internal_energy * gp.density && fabs(gp.HIdot * dtit) < CONVERGENCE * fmax(gp.HI_density, MINFRAC) && fabs(gp.dedot * dtit) < CONVERGENCE * fmax(gp.e_density, MINFRAC)) break;
@@ -123,6 +121,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    evolve_elements(&gp, &gp_old, chemistry);
 	}
 	if (dtcool < dt && chemistry->use_dust_evol) evolve_dust(&gp, chemistry, units, ism_flag, dt - dtcool); 
+	    assert(gp.verbose==0);
 
 	/* Copy from grackle_part_data */
 	copy_grackle_fields_from_part(p, &gp, chemistry);
@@ -500,7 +499,6 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 	    scoef += 2.f * my_rates.h2dust * p->HI_density * p->rhoH;
 	}
 	p->delta_H2I = (scoef * dtit + p->H2I_density) / (1.f + acoef * dtit) - p->H2I_density;
-	if (p->verbose) printf("H2: %g %g %g %g %g\n",scoef, acoef, p->delta_H2I, my_rates.h2dust, my_rates.k31shield);
 
 	/* H- */
 	scoef = my_rates.k7 * p->e_density * p->HI_density;
