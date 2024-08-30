@@ -3,8 +3,9 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define DUST_GROWTH_CAP 0.9 // Total dust growth is limited to this fraction of gas-phase metals
-#define DUST_CHANGE_CAP 10.0  // factor by which dust density can go up or down in a single step
+#define DUST_FRAC_CAP 0.9 // Total dust growth is limited to this fraction of gas-phase metals
+#define DUST_CHANGE_HI 100.0  // factor by which dust density can go up in a single step
+#define DUST_CHANGE_LO 0.5  // factor by which dust density can go down in a single step
 #define T_SPUTTERING 2.e4  // Temeprature below which sputtering is negligible
 
 static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry, code_units *units, int ism_flag, double dtit)
@@ -18,7 +19,10 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 	double sec_per_year = 3.1536e7;
 
 	if (gp->dust2gas <= tiny || gp->dust_density <= tiny) return;
-        double dens_cgs = gp->density * units->density_units / (units->a_value*units->a_value*units->a_value);  // to physical cgs
+
+        //double dens_cgs = gp->density * units->density_units / (units->a_value * units->a_value * units->a_value);  // to physical cgs
+        double dens_cgs = gp->density * units->density_units;
+
         for (k=0; k<NUM_METAL_SPECIES_GRACKLE; k++) drho[k] = 0.;
 
 	// Dust growth: metals accreted from gas to dust; only allowed when in ISM
@@ -26,11 +30,11 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
             tau_ref = chemistry->dust_growth_tauref * 1.e9 * sec_per_year / units->time_units;
             tau_accr0 = tau_ref * (chemistry->dust_growth_densref/dens_cgs) * sqrt(gp->tdust/gp->tgas); 
             for (k=0; k<NUM_METAL_SPECIES_GRACKLE; k++){
-		gp->dust_metalDensity[k] = fmax(gp->dust_metalDensity[k], tiny);
+		//gp->dust_metalDensity[k] = fmax(gp->dust_metalDensity[k], tiny);
                 rhomet[k] = gp->gas_metalDensity[k] + gp->dust_metalDensity[k];
-                tau_accr = tau_accr0 * gp->metallicity;
-		if (rhomet[k] < tiny || tau_accr < tiny) continue;
-                drho[k] = fmin((gp->gas_metalDensity[k] / rhomet[k]) * (gp->dust_metalDensity[k]/tau_accr) * dtit, DUST_GROWTH_CAP * gp->gas_metalDensity[k]); // growth in a single step capped at fraction of the available gas metals
+                tau_accr = tau_accr0 * chemistry->SolarAbundances[k] * gp->density / (gp->gas_metalDensity[k]+tiny);
+		//if (rhomet[k] < tiny || tau_accr < tiny) continue;
+                drho[k] = min((gp->gas_metalDensity[k] / rhomet[k]) * (gp->dust_metalDensity[k]/tau_accr) * dtit, DUST_FRAC_CAP * gp->gas_metalDensity[k]); // growth in a single step capped at fraction of the available gas metals
             }
 	}
 
@@ -41,13 +45,16 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
             else{
 	        const double mass_unit = units->density_units * units->length_units * units->length_units * units->length_units;
                 const double rhogas = gp->density - gp->dust_density;
-                const double Ms100 = 6800.0*chemistry->sne_coeff*(100.0/chemistry->sne_shockspeed)*(100.0/chemistry->sne_shockspeed) * SolarMass / mass_unit;  //code units, gas mass shocked per SNe (Sedov-Taylor phase)
-                f_shocked = fmin( (Ms100 * gp->SNe_density) / (rhogas+tiny), 1.);  // fraction of mass shock-heated
+                //const double Ms100 = 6800.0*chemistry->sne_coeff*(100.0/chemistry->sne_shockspeed)*(100.0/chemistry->sne_shockspeed) * SolarMass / mass_unit;  //code units, gas mass shocked per SNe (Sedov-Taylor phase) in Simba
+		const double SN_dust_destr_rate = 22.;  // dust destruction rate per SN in Mo/Myr (Kirchschlager+24, model BH)
+		const double tdyn = 1./sqrt(6.67e-8 * dens_cgs) / (1.e6 * sec_per_year);  // assume SN remnant lasts for tdyn; convert to Myr
+		const double Ms100 = SN_dust_destr_rate * tdyn * SolarMass / (mass_unit * chemistry->dust_destruction_eff);  // dust mass destroyed per SN, in code units
+                f_shocked = min((Ms100 * gp->SNe_density) / rhogas, 1.);  // fraction of mass shock-heated
                 drhos = gp->dust_density * f_shocked * chemistry->dust_destruction_eff;  // some fraction of dust is destroyed in shocked gas
-	if (gp->verbose) printf("dust: %g %g %g %g %g %g\n",gp->density, gp->nH, gp->SNe_density, rhogas, f_shocked, drhos);
+	if (gp->verbose) printf("dust: %g %g %g %g %g %g %g\n",gp->dust_density, Ms100 * mass_unit * chemistry->dust_destruction_eff / SolarMass, tdyn, dens_cgs, f_shocked, drhos, (gp->metal_density/(gp->metal_density+gp->dust_density)) * (gp->dust_density/tau_accr) * dtit);
 	    }
 	    /* sputtering */
-	    if (gp->tgas > T_SPUTTERING) {  // negligibly small below this temperature
+	    if (gp->tgas > T_SPUTTERING || !ism_flag) {  // negligibly small below this temperature
 	        tau_sput = 1.7e8 * sec_per_year / units->time_units
                            * (chemistry->dust_grainsize / 0.1) * (1.e-27 / dens_cgs)
                            * (pow(2.e6 / gp->tgas, 2.5) + 1.0); // sputtering timescale, Tsai & Mathews (1995)
@@ -61,26 +68,39 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 	}
 
 	/* Now evolve the dust metal density */
+	assert(gp->metal_density >= 0.);
 	gp->dust_density = 0.;
-	double old_dustDensity;
+	double old_dustDensity, old_metalDensity;
         for (k=0; k<NUM_METAL_SPECIES_GRACKLE; k++){
-	    /* Limit change to not allow negative dust */
 	    old_dustDensity = gp->dust_metalDensity[k];
+	    old_metalDensity = gp->dust_metalDensity[k] + gp->gas_metalDensity[k];
+	    /* Add to dust metallicity */
 	    gp->dust_metalDensity[k] += drho[k];
-	    if (gp->dust_metalDensity[k] > DUST_CHANGE_CAP*old_dustDensity) {
-	    	gp->dust_metalDensity[k] = DUST_CHANGE_CAP*old_dustDensity;
+	    /*if (gp->dust_metalDensity[k] < tiny) {
+		    drho[k] = - gp->dust_metalDensity[k];
+		    gp->dust_metalDensity[k] = tiny;
+	    }*/
+	    /* Limit change to dust within a single step, with cap on overall fraction of metals in dust */
+	    if (gp->dust_metalDensity[k] > DUST_CHANGE_HI*old_dustDensity || gp->dust_metalDensity[k] > DUST_FRAC_CAP*old_metalDensity) {
+	    	gp->dust_metalDensity[k] = min(DUST_CHANGE_HI*old_dustDensity, DUST_FRAC_CAP*old_metalDensity);
 		drho[k] = gp->dust_metalDensity[k] - old_dustDensity;
 	    }
-	    if (gp->dust_metalDensity[k] < old_dustDensity/DUST_CHANGE_CAP) {
-	    	gp->dust_metalDensity[k] = old_dustDensity/DUST_CHANGE_CAP;
+	    if (gp->dust_metalDensity[k] < old_dustDensity*DUST_CHANGE_LO) {
+	    	gp->dust_metalDensity[k] = old_dustDensity*DUST_CHANGE_LO;
 		drho[k] = gp->dust_metalDensity[k] - old_dustDensity;
 	    }
-	    /* Move metals from gas to dust (or vice versa) */
+	    /* Metals going into dust are taken out of gas */
 	    gp->gas_metalDensity[k] -= drho[k];
+	    gp->metal_density -= drho[k];
+	    /* Add up new dust densities */
 	    gp->dust_density += gp->dust_metalDensity[k];
         }
-	if (gp->verbose) printf("dust: tau_accr=%g tau_sput=%g snerho=%g drhos=%g rhog=%g td=%g tg=%g dust=%g\n",tau_accr0,tau_sput/3.,gp->SNe_density,drhos,gp->density,gp->tdust,gp->tgas,gp->dust_density);
+	if (gp->verbose) printf("dust: dtit=%g tau_accr=%g tau_sput=%g snerho=%g drhos=%g rhog=%g td=%g tg=%g dust=%g\n",dtit,tau_accr0,tau_sput/3.,gp->SNe_density,drhos,gp->density,gp->tdust,gp->tgas,gp->dust_density);
 	assert(gp->dust_density == gp->dust_density);
+	assert(gp->metal_density >= 0.);
+	assert(gp->dust_metalDensity[0] == 0.); // He should not participate in dust (nor N, Ne)
+	assert(gp->dust_density < gp->density);
+	assert(gp->verbose == 0);
 
 	return;
 }

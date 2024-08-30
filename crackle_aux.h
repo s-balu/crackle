@@ -143,8 +143,10 @@ static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_pa
 	    gp->RT_HeII_ionization_rate = 0.;
 	    gp->RT_H2_dissociation_rate = 0.;
 	}
-	if (chemistry->H2_custom_shielding) {
+	if (chemistry->H2_custom_shielding==2) {
 	    gp->H2_self_shielding_length = p->H2_self_shielding_length[0];
+	}
+	else if (chemistry->H2_custom_shielding==1) {
 	    gp->H2_custom_shielding_factor = p->H2_custom_shielding_factor[0];
 	}
 	else {
@@ -178,11 +180,13 @@ static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_pa
 	    gp->dust_metalDensity[8] = p->Ca_dust_metalDensity[0];
 	    gp->dust_metalDensity[9] = p->Fe_dust_metalDensity[0];
 	    gp->SNe_density = p->SNe_ThisTimeStep[0];
+	    assert(gp->dust_density == gp->dust_density);
+	    assert(p->He_dust_metalDensity[0]==0.);
 	}
 	else {
 	    gp->dust_density = 0.;
 	    gp->SNe_density = 0.;
-	    for (int i; i<NUM_METAL_SPECIES_GRACKLE; i++) {
+	    for (int i=0; i<NUM_METAL_SPECIES_GRACKLE; i++) {
 	    	gp->gas_metalDensity[i] = 0.;
 	    	gp->dust_metalDensity[i] = 0.;
 	    }
@@ -243,6 +247,7 @@ static inline void copy_grackle_fields_from_part(grackle_field_data *p, grackle_
 	    p->Ca_dust_metalDensity[0] = gp->dust_metalDensity[8];
 	    p->Fe_dust_metalDensity[0] = gp->dust_metalDensity[9];
 	}
+	assert(p->He_dust_metalDensity[0]==0.);
 
 }
 

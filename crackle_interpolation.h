@@ -74,22 +74,48 @@ static inline void compute_self_shielded_rates(grackle_part_data *gp, chemistry_
 	    my_rates->k30shield *= gp->fSShHeI;
 	}
 
-	/* H2 self-shielding following Wolcott-Green & Haiman (2019),
- 	   range of validity: T=100-8000 K, n<=1e7 cm^-3 */
-	if (chemistry->H2_self_shielding) {
-	    double l_H2shield = cunits.c_ljeans * sqrt(gp->tgas / (gp->mmw * gp->density));
-	    double N_H2 = cunits.dom * gp->H2I_density * l_H2shield;
-            double tgas_touse = fmin(fmax(gp->tgas,100.),8000);
-            double ngas_touse = fmin(gp->density* cunits.dom / gp->mmw, 1.e7);
-            double aWG2019 = (0.8711 * log10(tgas_touse) - 1.928) *
+	/* Set up H2 self-shielding */
+	double l_H2shield;
+	if (chemistry->H2_self_shielding > 0 && chemistry->H2_custom_shielding != 1) {
+	    if (chemistry->H2_custom_shielding > 0) {
+	        l_H2shield = gp->H2_self_shielding_length * cunits.length_to_cgs; // user specifies the H2 shielding length
+	    }
+	    else {  
+	        l_H2shield = cunits.c_ljeans * sqrt(gp->tgas / (gp->mmw * gp->density)); // otherwise we use the Jeans length
+	    }
+	    if (chemistry->H2_self_shielding >= 3) {
+	    /* H2 self-shielding following Wolcott-Green & Haiman (2019),
+ 	       range of validity: T=100-8000 K, n<=1e7 cm^-3 */
+	        const double N_H2 = cunits.dom * gp->rhoH2 * l_H2shield;
+                const double tgas_touse = min(max(gp->tgas,100.),8000);
+                const double ngas_touse = min(gp->density * cunits.dom / gp->mmw, 1.e7);
+                const double aWG2019 = (0.8711 * log10(tgas_touse) - 1.928) *
                     exp(-0.2856 * log10(ngas_touse)) +
                     (-0.9639 * log10(tgas_touse) + 3.892);
-            double x = 2.0e-15 * N_H2;
-            double b_doppler = 1e-5 * sqrtf(2. * kboltz * gp->tgas / mh);
-            double f_shield = 0.965 / pow(1. + x/b_doppler, aWG2019) +
+                const double x = 2.e-15 * N_H2;
+                const double b_doppler = 1.e-5 * sqrt(2. * kboltz * gp->tgas / mh);
+                const double f_shield = 0.965 / pow(1. + x/b_doppler, aWG2019) +
                     0.035 * exp(-8.5e-4 * sqrt(1. + x)) / sqrt(1. + x);
 
-	    my_rates->k31shield *= f_shield;
+	        my_rates->k31shield *= min(f_shield, 1.);
+	    }
+	    else if (chemistry->H2_self_shielding == 4) {  
+	        // H+H2 self-shielding from Schauer+15 eq 8,9
+	        const double NH_cgs = cunits.dom * gp->rhoH * l_H2shield;
+	        const double xH = NH_cgs / 2.85e23;
+	        const double fH_shield = pow(1.+xH,-1.62) * exp(-0.149*xH);
+	        const double NH2_cgs = cunits.dom * gp->rhoH2 * l_H2shield;
+    	        const double DH2_cgs = 1.e-5 * sqrt(2.*1.38e-16*gp->tgas / 3.346e-24);
+    	        const double xH2 = NH2_cgs / 8.465e13;
+    	        const double fH2_shield = 0.9379/pow(1.f+xH2/DH2_cgs,1.879) + 0.03465/pow(1.f+xH2,0.473) * exp(-2.293e-4*sqrt(1+xH2));
+
+	        my_rates->k31shield *= min(fH_shield, 1.) * min(fH2_shield, 1.);
+		//if (gp->verbose) printf("k31: %g %g %g %g %g %g %g\n",my_rates->k31shield, NH_cgs, NH2_cgs, gp->nH, gp->rhoH2/mh, fH_shield, fH2_shield);
+	    }
+	}
+	if (chemistry->H2_self_shielding > 0 && chemistry->H2_custom_shielding == 1) {
+	    // user specifies the H2 shielding factor directly
+	    my_rates->k31shield *= gp->H2_custom_shielding_factor;
 	}
 }
 
@@ -234,9 +260,9 @@ static inline void dust_species_rates(double tdust, double dust2gas, chemistry_d
         dust_interp->logT_hi = log(chemistry->DustTemperatureEnd);
 	if (dust_interp->logT > dust_interp->logT_hi) {
 	    /* Too hot to form dust on H2 */
-	    my_rates->h2dust = 0.;
-	    my_rates->gammah = 0.;
-	    return;
+	    //my_rates->h2dust = 0.;
+	    //my_rates->gammah = 0.;
+	    //return;
 	}
         dust_interp->logT = fmax(fmin(dust_interp->logT, dust_interp->logT_hi), dust_interp->logT_lo);
 
