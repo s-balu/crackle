@@ -105,7 +105,7 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 	return;
 }
 
-static inline double dust_thermal_balance(double tdust, double tgas, double trad, double trad4, double gamma_isrf, double gasgr, double nh)
+static inline double dust_thermal_balance(double tdust, double tgas, double tcmb, double tcmb4, double gamma_isrf, double gasgr, double nh)
 {
         const double kgr1 = 4.e-4;
         const double kgr200 = 16.f; /* dust-rad coupling at sublimation temp */
@@ -115,7 +115,7 @@ static inline double dust_thermal_balance(double tdust, double tgas, double trad
 
         /* Initialize: If input tdust<=0, return initial guess for tdust */
         if (tdust <= 0.f) {
-            tdust = fmax(trad, pow(0.25 * gamma_isrf / sigma_sb / kgr1, 0.17f));
+            tdust = fmax(tcmb, pow(0.25 * gamma_isrf / sigma_sb / kgr1, 0.17f));
             return tdust;
         }
 
@@ -126,28 +126,58 @@ static inline double dust_thermal_balance(double tdust, double tgas, double trad
         else kgr = fmax(tiny, kgr200 * pow(tdust/tsubl, 12.f));
         /* Compute dust heating-cooling rate */
         tdust4 = tdust * tdust * tdust * tdust;
-        sol = gamma_isrf + 4.f * sigma_sb * kgr * (trad4 - tdust4) + gasgr * nh * (tgas-tdust);
-        //printf("sol: %g %g %g %g %g %g\n",sol, tdust, gamma_isrf, kgr, trad4-tdust4,tgas-tdust);
+        sol = gamma_isrf + 4.f * sigma_sb * kgr * (tcmb4 - tdust4) + gasgr * nh * (tgas-tdust);
+        //printf("sol: %g %g %g %g %g %g\n",sol, tdust, gamma_isrf, kgr, tcmb4-tdust4,tgas-tdust);
 }
 
-static inline double calculate_dust_temp(double tgas, double nh, double gasgr, double gamma_isrf, double trad, double td)
+static inline double calculate_tdust_bisect(grackle_part_data *gp, double gasgr, double gamma_isrf, double tcmb)
+		//double tgas, double nh, double gasgr, double gamma_isrf, double tcmb, double td)
+{
+        /* Solve for Tdust from ISRF heating, CMB heating, and gas-grain cooling */
+        const double tol = 1.e-2;
+        const double range = 0.1;  // fractional allowed change in tdust in any given call
+        const double tcmb4 = tcmb * tcmb * tcmb * tcmb;
+        double tdold = -1.e20;
+	double td = gp->tdust;
+        int iter = 0, maxiter = 100, sol;
+
+        /* Solve for Tdust via bisection */
+        if (gp->tdust <= 0.f) td = dust_thermal_balance(td, gp->tgas, tcmb, tcmb4, gamma_isrf, gasgr, gp->nH); // initial guess
+	double tdhi = min(gp->tgas, (1.+range) * td);
+	double tdlo = max(tcmb, (1.-range) * td);
+        while (fabs(td-tdold) > tol * td) {
+            sol = dust_thermal_balance(td, gp->tgas, tcmb, tcmb4, gamma_isrf, gasgr, gp->nH);
+            tdold = td;
+	    if (sol > 0) tdlo = td;  // heating, so tdust should increase
+	    else tdhi = td;
+	    td = 0.5 * (tdlo + tdhi);  // new guess
+            if (++iter > maxiter) {
+                printf("Crackle: Non-convergence in calculate_dust_temp(), returning tdust=%g (tdold=%g, tdlo=%g tdhi=%g tgas=%g tcmb=%g)\n",td, tdold, tdlo, tdhi, gp->tgas, tcmb);
+                break;
+            }
+        }
+
+        return td;
+}
+
+static inline double calculate_dust_temp(double tgas, double nh, double gasgr, double gamma_isrf, double tcmb, double td)
 {
         /* Solve for Tdust from ISRF heating, CMB heating, and gas-grain cooling */
         const double tol = 1.e-3;
         double eps=1.e-2, tdold = -1.e20, dsol, slope; // for Newton-Raphson
-        //double tdlo=trad, tdhi=tgas; // bisection limits
-        const double trad4 = trad * trad * trad * trad;
+        //double tdlo=tcmb, tdhi=tgas; // bisection limits
+        const double tcmb4 = tcmb * tcmb * tcmb * tcmb;
         int iter = 0, maxiter = 100, sol;
 
         /* Solve for Tdust via Newton-Raphson */
-        if (td<=0.f) td = dust_thermal_balance(td, tgas, trad, trad4, gamma_isrf, gasgr, nh); // initial guess
+        if (td<=0.f) td = dust_thermal_balance(td, tgas, tcmb, tcmb4, gamma_isrf, gasgr, nh); // initial guess
         while (fabs(td-tdold) > tol * td) {
-            sol = dust_thermal_balance(td, tgas, trad, trad4, gamma_isrf, gasgr, nh);
-            dsol = dust_thermal_balance((1.f+eps)*td, tgas, trad, trad4, gamma_isrf, gasgr, nh) - sol;
+            sol = dust_thermal_balance(td, tgas, tcmb, tcmb4, gamma_isrf, gasgr, nh);
+            dsol = dust_thermal_balance((1.f+eps)*td, tgas, tcmb, tcmb4, gamma_isrf, gasgr, nh) - sol;
             tdold = td;
 	    if (dsol > 0.) td = td - td * eps * sol / dsol;  // Newton-Raphson guess
 	    else break;  // converged
-            if (td < trad) td = trad;  // Limit tdust to [tCMB, tgas]
+            if (td < tcmb) td = tcmb;  // Limit tdust to [tCMB, tgas]
             if (td > tgas) td = tgas;
             if (sol * (sol+dsol) < 0.f) eps *= 0.5f;  // we have passed minimum; reduce eps
             if (++iter > maxiter) {

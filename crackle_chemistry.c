@@ -202,7 +202,9 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	        double gasgr = interpolate_rates(grackle_rates.gas_grain, interpolation->binfrac, interpolation->index);
 	        double gasgr_tdust = chemistry->local_dust_to_gas_ratio * gasgr * cunits.coolunit / mh;
 	        /* Get dust rates */
-	        gp->tdust = calculate_dust_temp(gp->tgas, gp->nH, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing, cunits.compton2, gp->tdust); // calc_tdust_1d_g()
+	        //gp->tdust = calculate_dust_temp(gp->tgas, gp->nH, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing, cunits.compton2, gp->tdust); // calc_tdust_1d_g()
+	        gp->tdust = calculate_tdust_bisect(gp, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing, cunits.compton2);
+		//if(gp->tdust < 2*cunits.compton2) printf("DUST td=%g gasgr=%g tcmb=%g isrf=%g\n",gp->tdust, gasgr_tdust, cunits.compton2, gp->isrf_habing);
 	        /* Gas-dust grain heat transfer rate */
 	        dust_species_rates(gp->tdust, gp->dust2gas, chemistry, grackle_rates, my_rates, interpolation);
 	        if (gp->dust2gas > tiny) {
