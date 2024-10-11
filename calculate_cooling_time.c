@@ -146,6 +146,7 @@ int local_calculate_cooling_time(chemistry_data *my_chemistry,
   /* Calculate temperature units. */
 
   double temperature_units = get_temperature_units(my_units);
+  my_units->temperature_units = temperature_units;
 
   /* Call the fortran routine to solve cooling equations. */
 
