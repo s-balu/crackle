@@ -9,13 +9,15 @@ INSTALLATION INSTRUCTIONS
 
 Clone crackle into your /src/clib/ directory of grackle.  It should then appear in the crackle subdirectory.
 
-There are 5 files in grackle that crackle overwrites, in addition to adding many new ones.  From the /src/lib  directory, run the following commands to archive them in a separate directory, and then make symbolic links to (or copy over) all the crackle files:
+There are 6 files in grackle that crackle overwrites, in addition to adding many new ones.  From the /src/lib  directory, run the following commands to archive them in a separate directory, and then make symbolic links to (or copy over) all the crackle files:
 
 mkdir grackle_orig
 
 mv ./calculate_cooling_time.c grackle_orig
 
 mv ./calculate_temperature.c grackle_orig
+
+mv ./calculate_pressure.c grackle_orig
 
 mv ./grackle_chemistry_data.h grackle_orig
 
