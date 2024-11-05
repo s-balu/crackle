@@ -258,26 +258,22 @@ static inline void dust_species_rates(double tdust, double dust2gas, chemistry_d
         dust_interp->logT = log(tdust);
         dust_interp->logT_lo = log(chemistry->DustTemperatureStart);
         dust_interp->logT_hi = log(chemistry->DustTemperatureEnd);
-	if (dust_interp->logT > dust_interp->logT_hi) {
-	    /* Too hot to form dust on H2 */
-	    //my_rates->h2dust = 0.;
-	    //my_rates->gammah = 0.;
-	    //return;
-	}
-        dust_interp->logT = fmax(fmin(dust_interp->logT, dust_interp->logT_hi), dust_interp->logT_lo);
 
 	/* interpolation table setup */
         dust_interp->dlogT = (dust_interp->logT_hi - dust_interp->logT_lo)/(chemistry->NumberOfDustTemperatureBins-1);
         dust_interp->dlogT_inv = 1./dust_interp->dlogT;
+        dust_interp->logT = fmax(fmin(dust_interp->logT, dust_interp->logT_hi), dust_interp->logT_lo + dust_interp->dlogT);
 
         /* Compute indexing for lookup tables */
         dust_interp->index = (int)((dust_interp->logT-dust_interp->logT_lo) * dust_interp->dlogT_inv);
-        if (dust_interp->index < 0) dust_interp->index = 0;  
-	if (dust_interp->index > chemistry->NumberOfDustTemperatureBins-2) dust_interp->index = chemistry->NumberOfDustTemperatureBins-2;
+        if (dust_interp->index < 1) dust_interp->index = 1;  
+	if (dust_interp->index > chemistry->NumberOfDustTemperatureBins-1) dust_interp->index = chemistry->NumberOfDustTemperatureBins-1;
 
 	/* Compute fraction within T bin */
         const double t1 = dust_interp->index * dust_interp->dlogT;
         dust_interp->binfrac = (dust_interp->logT - t1) * dust_interp->dlogT_inv;
+	assert(dust_interp->binfrac >= 0.f);
+	assert(dust_interp->binfrac <= 1.f);
 
 	/* 2-D interpolation of dust-H2 formation rate table */
 	const int index1 = interpolation->index + chemistry->NumberOfTemperatureBins * (dust_interp->index-1);

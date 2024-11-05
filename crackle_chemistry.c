@@ -23,6 +23,7 @@
 
 #define MINFRAC 1.e-3
 #define CONVERGENCE 1.e-2
+#define HEATLIM 10.  // max heating factor allowed in a single system timestep
 
 
 int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, chemistry_data_storage grackle_rates, photo_rate_storage my_uvb_rates, code_units *units, double dt) 
@@ -46,10 +47,9 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	/* initialize inteprolation of chemistry rate tables for this particle */
 	init_temperature_interpolation(&gp, chemistry, &interpolation, cunits, grackle_rates);
 
-	/* (conservatively) see whether we should be evolving dust and H2 */
-	int ism_flag = (gp.isrf_habing < 0.);
+	/* ISM flag: see whether we should be evolving dust and H2 */
+	int ism_flag = (gp.isrf_habing >= 0.);
 	if (gp.isrf_habing < 0.) gp.isrf_habing = 0.;
-	ism_flag = (gp.nH > 0.013 && gp.tgas < 1.e6);
 
 	while (dtcool < dt) {
 	    //if (gp.density > 2.e9) gp.verbose=1;
@@ -62,7 +62,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    /* Compute rate of change of thermal energy */
 	    compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits);  
 	    /* If we've reached temp floor and are still cooling, then we're done */
-	    if (gp.tgas < chemistry->temperature_floor_scalar && gp.edot < 0.) break;
+	    if (apply_temperature_bounds(&gp, chemistry, gp.temperature_floor, HEATLIM * gp.tgas)) break;
 
 	    /* Check if we can (and if it's worthwhile to) use a predictor-corrector for the rest of the timestep */
 	    if (!ism_flag && fabs(gp.edot_ext) > EDOT_EXT_FACTOR * fabs(gp.edot-gp.edot_ext) && dtit < 0.25 * (dt-dtcool)) {
@@ -83,6 +83,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	        evolve_pred_corr(&gp, &gp_old, chemistry);
 	        if (chemistry->use_dust_evol) evolve_dust(&gp, chemistry, units, ism_flag, dtit); 
 		dtcool = dt + tiny;
+	        apply_temperature_bounds(&gp, chemistry, gp.temperature_floor, HEATLIM * gp.tgas);
 		break;
 	    }
 
@@ -203,7 +204,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	        double gasgr_tdust = chemistry->local_dust_to_gas_ratio * gasgr * cunits.coolunit / mh;
 	        /* Get dust rates */
 	        //gp->tdust = calculate_dust_temp(gp->tgas, gp->nH, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing, cunits.compton2, gp->tdust); // calc_tdust_1d_g()
-	        gp->tdust = calculate_tdust_bisect(gp, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing, cunits.compton2);
+	        calculate_tdust_bisect(gp, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing, cunits.compton2);
 		//if(gp->tdust < 2*cunits.compton2) printf("DUST td=%g gasgr=%g tcmb=%g isrf=%g\n",gp->tdust, gasgr_tdust, cunits.compton2, gp->isrf_habing);
 	        /* Gas-dust grain heat transfer rate */
 	        dust_species_rates(gp->tdust, gp->dust2gas, chemistry, grackle_rates, my_rates, interpolation);
@@ -664,27 +665,32 @@ void evolve_pred_corr(grackle_part_data *gp, grackle_part_data *gp_old, chemistr
 
 void crackle_cooling_time(grackle_field_data *p, chemistry_data *chemistry, chemistry_data_storage grackle_rates, photo_rate_storage my_uvb_rates, code_units *units, gr_float *tcool)
 {
-	grackle_part_data gp;
+	grackle_part_data gp[1];
 	chemistry_rate_storage my_rates;  // interpolated rates for this field
 	interp_struct interpolation;
 	crackle_units cunits;
 
 	/* Copy to grackle_part_data */
-	copy_grackle_fields_to_part(p, &gp, chemistry);
+	copy_grackle_fields_to_part(p, gp, chemistry);
 	/* Compute some basic properties */
-	set_rhot(&gp, units, chemistry);
+	set_rhot(gp, units, chemistry);
 	/* Set up various unit conversions etc */
 	set_crackle_units(units, grackle_rates, chemistry->Gamma, &cunits);
 	/* initialize inteprolation of chemistry rate tables for this particle */
-	init_temperature_interpolation(&gp, chemistry, &interpolation, cunits, grackle_rates);
+	init_temperature_interpolation(gp, chemistry, &interpolation, cunits, grackle_rates);
 	/* Set up cooling/heating rates interpolation */
-	setup_temperature_interpolation(gp.tgas, chemistry, &interpolation);
+	setup_temperature_interpolation(gp->tgas, chemistry, &interpolation);
 	/* Get interpolated chemistry rates for this particle */
 	lookup_chemistry_coeffs(chemistry->primordial_chemistry, grackle_rates, &my_rates, &interpolation);  
+	/* ISM flag: see whether we should be forming dust and evolving H2 */
+	int ism_flag = (gp->isrf_habing >= 0.);
+	if (gp->isrf_habing < 0.) gp->isrf_habing = 0.;
 	/* Compute rate of change of thermal energy */
-	compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits);  
+	gp->verbose = 0;
+	compute_edot(gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits);  
+	gp->verbose = 0;
 
-	*tcool = gp.internal_energy * gp.density / (gp.edot+tiny);
+	*tcool = gp->internal_energy * gp->density / (gp->edot+tiny);
 	return;
 }
 

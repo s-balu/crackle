@@ -82,6 +82,23 @@ static inline void set_rhot(grackle_part_data *gp, code_units *units, chemistry_
 	compute_electron_density(gp);
 }
 
+static inline int apply_temperature_bounds(grackle_part_data *gp, chemistry_data *chemistry, float tfloor, float tceiling)
+{
+	/* If we've reached temp floor and are still cooling, then return 1 to signal that iteration should end */
+        if (gp->tgas < tfloor && gp->edot < 0.) {
+            gp->internal_energy *= tfloor / gp->tgas;
+            gp->tgas = tfloor; 
+            return 1;
+        }
+        /* If we've reached temp ceiling and are still heating, we're also done */
+	else if (gp->tgas > tceiling && gp->edot > 0.) {
+            gp->internal_energy *= tceiling / gp->tgas;
+            gp->tgas = tceiling;
+            return 1;
+        }
+	return 0;
+}
+
 static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_part_data *gp, chemistry_data *chemistry) 
 {
 
