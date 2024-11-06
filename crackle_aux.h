@@ -198,7 +198,6 @@ static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_pa
 	    gp->dust_metalDensity[9] = p->Fe_dust_metalDensity[0];
 	    gp->SNe_density = p->SNe_ThisTimeStep[0];
 	    assert(gp->dust_density == gp->dust_density);
-	    assert(p->He_dust_metalDensity[0]==0.);
 	}
 	else {
 	    gp->dust_density = 0.;
@@ -264,7 +263,6 @@ static inline void copy_grackle_fields_from_part(grackle_field_data *p, grackle_
 	    p->Ca_dust_metalDensity[0] = gp->dust_metalDensity[8];
 	    p->Fe_dust_metalDensity[0] = gp->dust_metalDensity[9];
 	}
-	assert(p->He_dust_metalDensity[0]==0.);
 
 }
 

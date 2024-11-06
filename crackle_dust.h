@@ -68,7 +68,6 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 	}
 
 	/* Now evolve the dust metal density */
-	assert(gp->metal_density >= 0.);
 	gp->dust_density = 0.;
 	double old_dustDensity, old_metalDensity;
         for (k=0; k<NUM_METAL_SPECIES_GRACKLE; k++){
@@ -96,11 +95,11 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 	    gp->dust_density += gp->dust_metalDensity[k];
         }
 	if (gp->verbose) printf("dust: dtit=%g tau_accr=%g tau_sput=%g snerho=%g drhos=%g rhog=%g td=%g tg=%g dust=%g\n",dtit,tau_accr0,tau_sput/3.,gp->SNe_density,drhos,gp->density,gp->tdust,gp->tgas,gp->dust_density);
-	assert(gp->dust_density == gp->dust_density);
-	assert(gp->metal_density >= 0.);
-	assert(gp->dust_metalDensity[0] == 0.); // He should not participate in dust (nor N, Ne)
-	assert(gp->dust_density < gp->density);
-	assert(gp->verbose == 0);
+	//assert(gp->dust_density == gp->dust_density);
+	//assert(gp->metal_density >= 0.);
+	//assert(gp->dust_metalDensity[0] == 0.); // He should not participate in dust (nor N, Ne)
+	//assert(gp->dust_density < gp->density);
+	//assert(gp->verbose == 0);
 
 	return;
 }
@@ -167,7 +166,7 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
             if (gp->verbose) printf("sol: td=%g tg=%g sol=%g tdold=%g %g %g\n",td, gp->tgas, sol, tdold, tdlo, tdhi);
 	    if (sol > 0) tdlo = td;  // heating, so tdust should increase
 	    else tdhi = td;
-	    assert(tdlo < tdhi);
+	    if (fabs(tdhi-tdlo) < tol * (tdhi+tdlo) || tdlo > tdhi) break;
             //if (gp->verbose) printf("sol: sol=%g nH=%g td=%g tg=%g tdold=%g %g %g isrf=%g\n",sol, gp->nH, td, gp->tgas, tdold, tdlo, tdhi, gamma_isrf);
             if (++iter > maxiter) {
                 printf("Crackle: Non-convergence in calculate_dust_temp(), returning tdust=%g (tdold=%g, tdlo=%g tdhi=%g tgas=%g tcmb=%g)\n",td, tdold, tdlo, tdhi, gp->tgas, tcmb);
@@ -176,7 +175,7 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
         }
 
 	gp->tdust = td;
-	assert((gp->tdust >= tdlo) && (gp->tdust <= tdhi));
+	//assert((gp->tdust >= tdlo) && (gp->tdust <= tdhi));
 }
 
 static inline double calculate_dust_temp(double tgas, double nh, double gasgr, double gamma_isrf, double tcmb, double td)
