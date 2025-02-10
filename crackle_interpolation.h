@@ -156,7 +156,8 @@ static inline void setup_temperature_interpolation(double tgas, chemistry_data *
 {
         /* Compute indexing for lookup tables */
         interpolation->logT = log(tgas);
-        interpolation->logT = fmax(fmin(interpolation->logT, interpolation->logT_hi), interpolation->logT_lo);
+        if (interpolation->logT > interpolation->logT_hi) interpolation->logT = interpolation->logT_hi;
+        if (interpolation->logT < interpolation->logT_lo) interpolation->logT = interpolation->logT_lo;
         interpolation->index = (int)((interpolation->logT-interpolation->logT_lo) * interpolation->dlogT_inv);
         if (interpolation->index < 0) interpolation->index = 0;  
 	if (interpolation->index > chemistry->NumberOfTemperatureBins-2) interpolation->index = chemistry->NumberOfTemperatureBins-2;
@@ -262,7 +263,8 @@ static inline void dust_species_rates(double tdust, double dust2gas, chemistry_d
 	/* interpolation table setup */
         dust_interp->dlogT = (dust_interp->logT_hi - dust_interp->logT_lo)/(chemistry->NumberOfDustTemperatureBins-1);
         dust_interp->dlogT_inv = 1./dust_interp->dlogT;
-        dust_interp->logT = fmax(fmin(dust_interp->logT, dust_interp->logT_hi), dust_interp->logT_lo + dust_interp->dlogT);
+	if (dust_interp->logT < dust_interp->logT_lo + dust_interp->dlogT) dust_interp->logT = dust_interp->logT_lo + dust_interp->dlogT;
+	if (dust_interp->logT > dust_interp->logT_hi) dust_interp->logT = dust_interp->logT_hi;
 
         /* Compute indexing for lookup tables */
         dust_interp->index = (int)((dust_interp->logT-dust_interp->logT_lo) * dust_interp->dlogT_inv);
@@ -270,7 +272,7 @@ static inline void dust_species_rates(double tdust, double dust2gas, chemistry_d
 	if (dust_interp->index > chemistry->NumberOfDustTemperatureBins-1) dust_interp->index = chemistry->NumberOfDustTemperatureBins-1;
 
 	/* Compute fraction within T bin */
-        const double t1 = dust_interp->index * dust_interp->dlogT;
+        const double t1 = dust_interp->index * dust_interp->dlogT + dust_interp->logT_lo;
         dust_interp->binfrac = (dust_interp->logT - t1) * dust_interp->dlogT_inv;
 	assert(dust_interp->binfrac >= 0.f);
 	assert(dust_interp->binfrac <= 1.f);
