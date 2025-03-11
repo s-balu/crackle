@@ -299,10 +299,13 @@ double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *c
 		- 0.25 * my_rates.k4 * gp.HeII_density * gp.e_density
 		- 0.25 * my_rates.k6 * gp.HeIII_density * gp.e_density
 		+ my_rates.k57 * gp.HI_density * gp.HI_density 
-		+ 0.25 * my_rates.k58 * gp.HI_density * gp.HeI_density
+		+ 0.25 * my_rates.k58 * gp.HI_density * gp.HeI_density;
+
+	if (chemistry->UVbackground > 0) {
 		+ my_rates.k24shield * gp.HI_density 
 		+ 0.25 * my_rates.k25shield * gp.HeII_density 
 		+ 0.25 * my_rates.k26shield * gp.HeI_density;
+	}
 	/* RT photoionization */
 	if (chemistry->use_radiative_transfer && gp.RT_heating_rate > tiny) {
 	    dedot += gp.RT_HI_ionization_rate * gp.HI_density + 0.25 * (gp.RT_HeI_ionization_rate * gp.HeI_density + gp.RT_HeII_ionization_rate * gp.HeII_density);
@@ -352,8 +355,10 @@ double compute_HIdot(int chemistry_flag, grackle_part_data gp, chemistry_data *c
 		    + my_rates.k15 * gp.HM_density * gp.HI_density
 		    + 2.f *my_rates.k16 * gp.HII_density * gp.HM_density 
 		    + my_rates.k18 * gp.e_density * gp.H2II_density
-		    + 0.5 * my_rates.k19 * gp.HM_density * gp.H2II_density
-		    + my_rates.k31shield * gp.H2I_density;
+		    + 0.5 * my_rates.k19 * gp.HM_density * gp.H2II_density;
+	    if (chemistry->UVbackground > 0) {
+		HIdot += my_rates.k31shield * gp.H2I_density;
+	    }
 	    if(chemistry->use_dust_evol && gp.dust2gas > tiny) {
 		HIdot -= 2.f *my_rates.h2dust * (gp.HI_density + gp.HII_density);
 	    }
@@ -377,9 +382,12 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 
 	/* HeII */
 	scoef = my_rates.k3 * HeIp * p->e_density +
-		my_rates.k6 * p->HeIII_density * p->e_density +
-		my_rates.k26 * HeIp;
-	acoef = (my_rates.k4 + my_rates.k5) * p->e_density + my_rates.k25;
+		my_rates.k6 * p->HeIII_density * p->e_density;
+	acoef = (my_rates.k4 + my_rates.k5) * p->e_density;
+	if (chemistry->UVbackground > 0) {
+	    scoef += my_rates.k26 * HeIp;
+	    acoef += my_rates.k25;
+	}
 	if (chemistry->use_radiative_transfer) {
 	    scoef += p->RT_HeI_ionization_rate * HeIp;
 	    acoef += p->RT_HeII_ionization_rate;
@@ -389,12 +397,19 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	p->delta_HeII = HeIIp - p->HeII_density;
 
 	/* HeIII */
-	scoef = my_rates.k5 * HeIIp * p->e_density
-		+ my_rates.k25shield * HeIIp;
+	scoef = my_rates.k5 * HeIIp * p->e_density;
 	acoef = my_rates.k6 * p->e_density;
+	if (chemistry->UVbackground > 0) {
+	    scoef += my_rates.k25shield * HeIIp;
+	}
 	if (chemistry->use_radiative_transfer) scoef += p->RT_HeII_ionization_rate * HeIIp;
 	p->delta_HeIII = (scoef * dtit + p->HeIII_density) / (1.f + acoef * dtit) - p->HeIII_density; 
 	if (p->delta_HeIII + p->HeIII_density < 0.f ) p->delta_HeIII = -p->HeIII_density;
+	/* if (p->delta_HeII != p->delta_HeII || p->delta_HeIII != p->delta_HeIII) {
+	    fprintf(stdout, "dHeII=%g dHeIII=%g scoef=%g acoef=%g HeIIp=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_HeII, p->delta_HeIII, scoef, acoef, HeIIp, p->e_density, my_rates.k3, my_rates.k4, my_rates.k5, my_rates.k6, my_rates.k25, my_rates.k25shield, my_rates.k26);
+	    fflush(stdout);
+	}*/
+	assert(p->delta_HeII==p->delta_HeII);
 
 	return;
 }
@@ -413,14 +428,21 @@ void evolve_hydrogen(grackle_part_data *p, grackle_part_data *gp_old, chemistry_
      	          + my_rates.k15 * p->HM_density * p->HI_density
      	          + 2. * my_rates.k16 * p->HM_density * p->HII_density
      	          + my_rates.k18 * p->H2II_density * p->e_density
-     	          + 0.5 * my_rates.k19 * p->H2II_density * p->HM_density
-     	          + my_rates.k31shield * p->H2I_density;
+     	          + 0.5 * my_rates.k19 * p->H2II_density * p->HM_density;
+	    if (chemistry->UVbackground > 0) {
+     	          scoef += my_rates.k31shield * p->H2I_density;
+	    }
 	}
 	acoef = my_rates.k1 * p->e_density
 	      +	my_rates.k57 * p->HI_density
-	      +	0.25 * my_rates.k58 * p->HeI_density
-	      +	my_rates.k24shield
-	      + p->RT_HI_ionization_rate;
+	      +	0.25 * my_rates.k58 * p->HeI_density;
+
+	if (chemistry->UVbackground > 0) {
+     	      acoef += my_rates.k24shield;
+	}
+	if (chemistry->use_radiative_transfer) {
+	      acoef += p->RT_HI_ionization_rate;
+	}
 	if (chemistry->primordial_chemistry >= 2) {
 	    acoef += my_rates.k7 * p->e_density
 	          + my_rates.k8 * p->HM_density
@@ -439,14 +461,19 @@ void evolve_hydrogen(grackle_part_data *p, grackle_part_data *gp_old, chemistry_
 	scoef = my_rates.k1 * p->HI_density * p->e_density
 	      +	0.5 * my_rates.k10 * p->H2II_density * p->HI_density
 	      +	my_rates.k57 * p->HI_density * p->HI_density
-	      +	0.25 * my_rates.k58 * p->HeI_density * p->HI_density
-	      +	my_rates.k24shield * p->HI_density
-	      + p->RT_HI_ionization_rate * p->HI_density;
+	      +	0.25 * my_rates.k58 * p->HeI_density * p->HI_density;
 	acoef = my_rates.k2 * p->e_density
 	      +	my_rates.k9 * p->HI_density
 	      +	0.5 * my_rates.k11 * p->H2I_density
 	      +	my_rates.k16 * p->HM_density
 	      +	my_rates.k17 * p->HM_density;
+
+	if (chemistry->UVbackground > 0) {
+	    scoef += my_rates.k24shield * p->HI_density;
+	}
+	if (chemistry->use_radiative_transfer) {
+	    scoef += p->RT_HI_ionization_rate * p->HI_density;
+	}
 	double HIIp = (scoef * dtit + p->HII_density) / (1.f + acoef * dtit);
 	if (HIIp < 0. ) HIIp = 0.;
 	p->delta_HII = HIIp - p->HII_density;
@@ -457,13 +484,18 @@ void evolve_hydrogen(grackle_part_data *p, grackle_part_data *gp_old, chemistry_
 	      + my_rates.k17 * p->HM_density * p->HII_density
 	      +	my_rates.k10 * p->H2II_density * p->HI_density
 	      +	my_rates.k57 * p->HI_density * p->HI_density
-	      +	0.25 * my_rates.k58 * p->HeI_density * p->HI_density
-     	      + my_rates.k24shield * HIp
-     	      + 0.25 * my_rates.k25shield * (p->HeII_density+p->delta_HeII)
-     	      + 0.25 * my_rates.k26shield * (p->HeI_density+p->delta_HeI)
-	      + p->RT_HI_ionization_rate * HIp
-	      + 0.25 * p->RT_HeI_ionization_rate * (p->HeI_density+p->delta_HeI)
-	      + 0.25 * p->RT_HeII_ionization_rate * (p->HeII_density+p->delta_HeII);
+	      +	0.25 * my_rates.k58 * p->HeI_density * p->HI_density;
+
+	if (chemistry->UVbackground > 0) {
+	    scoef += my_rates.k24shield * HIp
+     	          + 0.25 * my_rates.k25shield * (p->HeII_density+p->delta_HeII)
+     	          + 0.25 * my_rates.k26shield * (p->HeI_density+p->delta_HeI);
+	}
+	if (chemistry->use_radiative_transfer) {
+	    scoef += p->RT_HI_ionization_rate * HIp
+	          + 0.25 * p->RT_HeI_ionization_rate * (p->HeI_density+p->delta_HeI)
+	          + 0.25 * p->RT_HeII_ionization_rate * (p->HeII_density+p->delta_HeII);
+	}
 	acoef = my_rates.k1 * p->HI_density
 	      - my_rates.k2 * p->HII_density
 	      +	0.25 * my_rates.k3 * p->HeI_density
@@ -501,8 +533,10 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 		2.f * my_rates.k22 * p->HI_density * p->HI_density * p->HI_density;
 	acoef = my_rates.k13 * p->HI_density + 
 		my_rates.k11 * p->HII_density +
-		my_rates.k12 * p->e_density +
-		my_rates.k29shield + my_rates.k31shield;
+		my_rates.k12 * p->e_density;
+	if (chemistry->UVbackground > 0) {
+	    acoef += my_rates.k29shield + my_rates.k31shield;
+	}
 	if (chemistry->use_dust_evol && p->dust2gas > tiny) {
 	    scoef += 2.f * my_rates.h2dust * p->HI_density * p->rhoH;
 	}
@@ -515,8 +549,10 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 	acoef = (my_rates.k8 + my_rates.k15) * p->HI_density + 
 		(my_rates.k16 + my_rates.k17) * p->HII_density + 
 		my_rates.k14 * p->e_density +
-		0.5 * my_rates.k19 * p->H2II_density + 
-		my_rates.k27;
+		0.5 * my_rates.k19 * p->H2II_density;
+	if (chemistry->UVbackground > 0) {
+	    acoef += my_rates.k27;
+	}
 	p->delta_HM = (scoef * dtit + p->HM_density) / (1.f + acoef * dtit) - p->HM_density;
 
 	/* H2+ */
