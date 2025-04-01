@@ -158,6 +158,9 @@ static inline void init_temperature_interpolation(grackle_part_data *gp, chemist
 	interpolation->cloudy_dxinv[1] = 1. / (gr.cloudy_metal.grid_parameters[1][interpolation->cloudy_index[1]+1] - gr.cloudy_metal.grid_parameters[1][interpolation->cloudy_index[1]]);
 	//interpolation->cloudy_delta[1] = ((interpolation->cloudy_par[1] - gr.cloudy_metal.grid_parameters[1][interpolation->cloudy_index[1]]) * interpolation->cloudy_dxinv[1]);
 
+	/* Accuracy value must be non-zero otherwise code will not do cooling */
+	assert(chemistry->accuracy > 0.f && "CRACKLE ERROR: chemistry->accuracy input value must be greater than zero! (typically 0.1)");
+
 	return;
 }
 

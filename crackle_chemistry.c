@@ -113,7 +113,6 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    if (fabs(gp_old.internal_energy - gp.internal_energy) < CONVERGENCE * gp_old.internal_energy 
 		&& fabs(gp_old.HI_density - gp.HI_density) < CONVERGENCE * fmax(gp_old.HI_density, MINFRAC*gp_old.density)
 		&& fabs(gp_old.e_density - gp.e_density) < CONVERGENCE * fmax(gp_old.e_density, MINFRAC*gp_old.density) ) break;
-	    //assert(gp.verbose==0);
 	    if (iter > chemistry->max_iterations) break;
 	    gp.verbose = 0;
 	}
@@ -281,8 +280,12 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	gp->edot_ext += edot_ext;
 
 	//gp->edot = edot_prim + edot/_h2 + edot_gasgr + edot_uvb + edot_pe + edot_edust + edot_comp + edot_rt + edot_h2heat + edot_ext + edot_metal;
-	if (gp->verbose) printf("edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal);
-	assert(gp->edot==gp->edot);  // check for NaN
+	if (gp->verbose) {
+	    printf("edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal); 
+	    fflush(stdout);
+	}
+
+	assert(gp->edot==gp->edot && "CRACKLE ERROR: gp->edot is nan.");  // check for NaN
 
 	return;
 }
@@ -409,7 +412,6 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	    fprintf(stdout, "dHeII=%g dHeIII=%g scoef=%g acoef=%g HeIIp=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_HeII, p->delta_HeIII, scoef, acoef, HeIIp, p->e_density, my_rates.k3, my_rates.k4, my_rates.k5, my_rates.k6, my_rates.k25, my_rates.k25shield, my_rates.k26);
 	    fflush(stdout);
 	}*/
-	assert(p->delta_HeII==p->delta_HeII);
 
 	return;
 }
@@ -659,7 +661,6 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 
 	/* Compute new electron density */
 	compute_electron_density(gp);
-	//if (gp->nH>1.e2 && gp->delta_H2I > 0. && gp->H2I_density < gp_old->H2I_density) assert(0==1);
 
 	return;
 }
@@ -738,7 +739,6 @@ void crackle_temperature(grackle_field_data *p, chemistry_data *chemistry, code_
 	copy_grackle_fields_to_part(p, &gp, chemistry);
 	/* Compute some basic properties */
 	set_rhot(&gp, units, chemistry);
-	//assert(gp.tgas == -100);
 
 	*temp = gp.tgas;
 	return;
