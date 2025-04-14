@@ -1,9 +1,13 @@
 Crackle is a fully C-based version of the Grackle cooling and chemistry code.  Information on Grackle is available here:
 https://grackle.readthedocs.io/en/latest/index.html
 
-Currently crackle ONLY works with Ewan Jones's kiara branch of grackle, which is unfortunately private until Ewan gets his thesis papers out.  However, it should be straightforward to adapt it to the main grackle branch.  If I have time at some point I will try to do this, but I will also happily accept pull requests:)
+Currently crackle ONLY works with Ewan Jones's kiara branch of Grackle, which includes the subgrid ISM dust+H2 model described here: 
+https://ui.adsabs.harvard.edu/abs/2024MNRAS.535.1293J/abstract
+Ewan's Grackle branch is here:
+https://github.com/EwanBJones98/grackle
+Don't forget to checkout the kiara branch.
 
-To use Crackle, replace/add the codes in this repo to those in the Grackle repo under src/clib (see below).  Then when putting it in your C code, set use_grackle=2.  The API is otherwise the same.
+To use Crackle, replace/add the codes in this repo to those in the above Grackle repo under src/clib (see below).  Then when putting it in your C code, set use_grackle=2.  The API is otherwise the same.
 
 INSTALLATION INSTRUCTIONS
 
