@@ -416,6 +416,16 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	return;
 }
 
+void check_hydrogen(grackle_part_data *p) 
+{
+	double H_density = p->HI_density + p->HII_density + p->HM_density;
+	double H2_density = p->H2I_density + p->H2II_density;
+	double H_frac = (H_density + H2_density) / p->density;
+	assert(H_frac > 0.6 && H_frac < 0.8);
+	assert(p->HI_density >= 0.f);
+	assert(p->HII_density >= 0.f);
+}
+
 void evolve_hydrogen(grackle_part_data *p, grackle_part_data *gp_old, chemistry_data *chemistry, chemistry_rate_storage my_rates, double dtit) /* from step_rate_g() */
 { 
 	double scoef, acoef;
@@ -578,6 +588,7 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 
 void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry)
 {
+	check_hydrogen(gp);
 	/* Limit change for H species */
 	if (gp->HI_density + gp->delta_HI < 0.) gp->delta_HI = -gp->HI_density;
 	if (gp->HI_density + gp->delta_HI > gp->rhoH) gp->delta_HI = gp->rhoH - gp->HI_density;
@@ -589,34 +600,6 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 	if (gp->H2II_density + gp->delta_H2II > gp->rhoH) gp->delta_H2II = gp->rhoH - gp->H2II_density;
 	if (gp->HM_density + gp->delta_HM < 0.) gp->delta_HM = -gp->HM_density;
 	if (gp->HM_density + gp->delta_HM > gp->rhoH) gp->delta_HM = gp->rhoH - gp->HM_density;
-
-	/* Reconcile H changes 
-	double dH = gp->delta_HI + gp->delta_HII + gp->delta_H2I + gp->delta_H2II + gp->delta_HM;
-	fflush(stdout);
-	double dHpos = 0.;
-	if (gp->delta_HI > 0.) dHpos += gp->delta_HI;
-	if (gp->delta_HII > 0.) dHpos += gp->delta_HII;
-	if (gp->delta_H2I > 0.) dHpos += gp->delta_H2I;
-	if (gp->delta_H2II > 0.) dHpos += gp->delta_H2II;
-	if (gp->delta_HM > 0.) dHpos += gp->delta_HM;
-	double dHneg = dH - dHpos;
-	double fcorr;
-	if (dH > 0.) {
-	    fcorr = fabs(dHneg) / dHpos;
-	    if (gp->delta_HI > 0.) gp->delta_HI *= fcorr;
-	    if (gp->delta_HII > 0.) gp->delta_HII *= fcorr;
-	    if (gp->delta_H2I > 0.) gp->delta_H2I *= fcorr;
-	    if (gp->delta_H2II > 0.) gp->delta_H2II *= fcorr;
-	    if (gp->delta_HM > 0.) gp->delta_HM *= fcorr;
-	}
-	if (dH < 0.) {
-	    fcorr = dHpos / fabs(dHneg);
-	    if (gp->delta_HI < 0.) gp->delta_HI *= fcorr;
-	    if (gp->delta_HII < 0.) gp->delta_HII *= fcorr;
-	    if (gp->delta_H2I < 0.) gp->delta_H2I *= fcorr;
-	    if (gp->delta_H2II < 0.) gp->delta_H2II *= fcorr;
-	    if (gp->delta_HM < 0.) gp->delta_HM *= fcorr;
-	}*/
 
 	/* Evolve H species */
 	gp->HI_density += gp->delta_HI;
@@ -633,7 +616,7 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 	if (gp->HeII_density < tiny) gp->HeII_density = tiny;
 	if (gp->HeIII_density < tiny) gp->HeIII_density = tiny;
 
-	/* Now ensure H & He are conserved */
+	/* Ensure H & He are conserved (since these are unaffected by dust) */
 	const double H_old = gp_old->HI_density + gp_old->HII_density + gp_old->H2I_density + gp_old->H2II_density + gp_old->HM_density;
 	const double He_old = gp_old->HeI_density + gp_old->HeII_density + gp_old->HeIII_density;
 	const double H_new = gp->HI_density + gp->HII_density + gp->H2I_density + gp->H2II_density + gp->HM_density;
@@ -643,21 +626,17 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 	const double He_factor = He_old / (He_new+tiny);
 
 	/* Correct densities to conserve H, He */
-	if (H_factor < 1. && gp->delta_H2I > 0. && gp->HI_density > H_new - H_old) {
-	    gp->HI_density -= (H_new - H_old) * gp->HI_density / (gp->HI_density + gp->HII_density);
-	    gp->HII_density -= (H_new - H_old) * gp->HII_density / (gp->HI_density + gp->HII_density);
-	}
-	else {
-	    gp->HI_density *= H_factor;
-	    gp->HII_density *= H_factor;
-	    gp->H2I_density *= H_factor;
-	    gp->H2II_density *= H_factor;
-	    gp->HM_density *= H_factor;
-	}
+	gp->HI_density *= H_factor;
+	gp->HII_density *= H_factor;
+	gp->H2I_density *= H_factor;
+	gp->H2II_density *= H_factor;
+	gp->HM_density *= H_factor;
 
 	gp->HeI_density *= He_factor;
 	gp->HeII_density *= He_factor;
 	gp->HeIII_density *= He_factor;
+
+	check_hydrogen(gp);
 
 	/* Compute new electron density */
 	compute_electron_density(gp);
