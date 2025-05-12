@@ -215,7 +215,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	}
 
 	/* UVB heating and shielding */
-	if (chemistry->UVbackground) {
+	if (chemistry->UVbackground && gp->grid_end >= 0) {
 	    compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits);
 	    edot_uvb += cunits.dom_inv * (my_uvb_rates.piHI * gp->fSShHI * gp->HI_density + 0.25 * (my_uvb_rates.piHeI * gp->fSShHeI * gp->HeI_density + my_uvb_rates.piHeII * gp->fSShHeII * gp->HeII_density));
 	    gp->edot += edot_uvb;
