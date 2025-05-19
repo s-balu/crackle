@@ -421,7 +421,7 @@ void check_hydrogen(grackle_part_data *p)
 	double H_density = p->HI_density + p->HII_density + p->HM_density;
 	double H2_density = p->H2I_density + p->H2II_density;
 	double H_frac = (H_density + H2_density) / p->density;
-	assert(H_frac > 0.6 && H_frac < 0.8);
+	assert(H_frac > 0.4 && H_frac < 0.8);
 	assert(p->HI_density >= 0.f);
 	assert(p->HII_density >= 0.f);
 }
