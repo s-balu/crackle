@@ -377,7 +377,10 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 
 	/* HeI */
 	scoef = my_rates.k4 * p->HeII_density * p->e_density;
-	acoef = my_rates.k3 * p->e_density + my_rates.k26;
+	acoef = my_rates.k3 * p->e_density;
+	if (chemistry->UVbackground > 0) {
+	    acoef += my_rates.k26;
+	}
 	if (chemistry->use_radiative_transfer) acoef += p->RT_HeI_ionization_rate;
 	double HeIp = (scoef * dtit + p->HeI_density) / (1.f + acoef * dtit);
 	if (HeIp < 0. ) HeIp = 0.;
@@ -408,9 +411,11 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	if (chemistry->use_radiative_transfer) scoef += p->RT_HeII_ionization_rate * HeIIp;
 	p->delta_HeIII = (scoef * dtit + p->HeIII_density) / (1.f + acoef * dtit) - p->HeIII_density; 
 	if (p->delta_HeIII + p->HeIII_density < 0.f ) p->delta_HeIII = -p->HeIII_density;
-	/* if (p->delta_HeII != p->delta_HeII || p->delta_HeIII != p->delta_HeIII) {
-	    fprintf(stdout, "dHeII=%g dHeIII=%g scoef=%g acoef=%g HeIIp=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_HeII, p->delta_HeIII, scoef, acoef, HeIIp, p->e_density, my_rates.k3, my_rates.k4, my_rates.k5, my_rates.k6, my_rates.k25, my_rates.k25shield, my_rates.k26);
+	/*if (p->delta_HeII != p->delta_HeII || p->delta_HeIII != p->delta_HeIII) {
+	    fprintf(stdout, "TROUBLE: dHeII=%g dHeIII=%g scoef=%g acoef=%g HeIIp=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_HeII, p->delta_HeIII, scoef, acoef, HeIIp, p->e_density, my_rates.k3, my_rates.k4, my_rates.k5, my_rates.k6, my_rates.k25, my_rates.k25shield, my_rates.k26);
 	    fflush(stdout);
+	    assert(p->delta_HeII == p->delta_HeII);
+	    assert(p->delta_HeIII == p->delta_HeIII);
 	}*/
 
 	return;
@@ -575,14 +580,30 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 	H2Ip = p->H2I_density + p->delta_H2I;
 	HMp = p->HM_density + p->delta_HM;
 	dep = p->e_density + p->delta_e;
-	p->delta_H2II = 2.f * (my_rates.k9 * HIp * HIIp +
+	if (chemistry->UVbackground > 0) {
+	    p->delta_H2II = 2.f * (my_rates.k9 * HIp * HIIp +
 		0.5 * my_rates.k11 * H2Ip * HIIp +
 		my_rates.k17 * HMp * HIIp +
 		my_rates.k29shield * H2Ip) / 
 		(my_rates.k10 * HIp + my_rates.k18 * dep +
 		my_rates.k19 * HMp + my_rates.k28shield + my_rates.k30shield)
 		- p->H2II_density;
+	}
+	else {
+	    p->delta_H2II = 2.f * (my_rates.k9 * HIp * HIIp +
+		0.5 * my_rates.k11 * H2Ip * HIIp +
+		my_rates.k17 * HMp * HIIp) / 
+		(my_rates.k10 * HIp + my_rates.k18 * dep +
+		my_rates.k19 * HMp)
+		- p->H2II_density;
+	}
 
+	/*if (p->delta_H2I != p->delta_H2I || p->delta_H2II != p->delta_H2II) {
+	    fprintf(stdout, "TROUBLE: dH2I=%g dH2II=%g scoef=%g acoef=%g H2Ip=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_H2I, p->delta_H2II, scoef, acoef, H2Ip, p->e_density, my_rates.k3, my_rates.k4, my_rates.k5, my_rates.k6, my_rates.k25, my_rates.k25shield, my_rates.k26);
+	    fflush(stdout);
+	    assert(p->delta_H2I == p->delta_H2I);
+	    assert(p->delta_H2II == p->delta_H2II);
+	}*/
 	return;
 }
 
