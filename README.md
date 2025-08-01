@@ -33,3 +33,20 @@ ln -s crackle/* .
 
 Then proceed with making grackle as usual.  
 To update crackle, just git pull the changes into the crackle subdirectory and all should proceed as normal (if you've made symlinks).
+
+NCI-Gadi specific install instruction:
+
+Edit the `src/clib/Make.mach.gadi` file by changing the `MACH_INSTALL_PREFIX` to the location of grackle_kiara.
+Then install grackle_kiara as:
+```
+cd grackle
+./configure
+cd src/clib/
+## edit Make.mach.gadi
+## edit path to install library MACH_INSTALL_PREFIX = $(HOME)/<grackle location>#
+make machine-gadi
+make show-config
+make clean
+make
+make install
+```
