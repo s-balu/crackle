@@ -17,6 +17,7 @@ typedef struct
   double edot_ext;
   double dedot;
   double HIdot;
+  double H2Idot;
   double fSShHI;
   double fSShHeI;
   double fSShHeII;
@@ -27,6 +28,7 @@ typedef struct
   double mmw;
   double tgas;
   double logtem;
+  double tstart;
   double tdust;
   double metallicity;
   double dust2gas;
@@ -41,6 +43,7 @@ typedef struct
   double delta_H2II;
   double delta_e;
   int verbose;
+  int id;
 
   /* Scalar copy of grackle_field_data */
 
@@ -86,6 +89,7 @@ typedef struct
   cr_float H2_custom_shielding_factor;
 
   cr_float isrf_habing;
+  cr_float f_shield;
 
   /* Individual metal+dust species stored in arrays 
    * Species order [0-9]: He, C, N, O, Ne, Mg, Si, D, Ca, Fe */
@@ -322,13 +326,13 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 
 void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, double dtit);
 
-void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage rates_table, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits);
+void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage rates_table, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag);
 
 double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *chemistry, chemistry_rate_storage my_rates, code_units *units);
 
 double compute_HIdot(int chemistry_flag, grackle_part_data gp, chemistry_data *chemistry, chemistry_rate_storage my_rates, code_units *units);
 
-double compute_iteration_dt(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, double dt, double dtcool, double *dtsuppress);
+double compute_iteration_dt(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, double dt, double dtcool, float accuracy, double *dtsuppress);
 
 void evolve_helium(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, chemistry_rate_storage my_rates, double dtit);
 
@@ -339,6 +343,8 @@ void evolve_H2(grackle_part_data *gp, int ism_flag, chemistry_data *chemistry, c
 void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry);
 
 void evolve_pred_corr(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry);
+
+void save_species_data(grackle_part_data *gp_orig, grackle_part_data *gp_target);
 
 //void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry, code_units *units, int ism_flag, double dtit);
 
